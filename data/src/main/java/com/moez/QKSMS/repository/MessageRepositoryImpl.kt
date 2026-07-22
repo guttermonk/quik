@@ -403,7 +403,7 @@ open class MessageRepositoryImpl @Inject constructor(
             }
             ?: 0
 
-    private fun syncProviderMessage(uri: Uri, sendAsGroup: Boolean): Message? {
+    private fun syncProviderMessage(uri: Uri, sendAsGroup: Boolean, asReaction: Boolean = false): Message? {
         // if uri doesn't have valid type
         val type = when {
             uri.toString().contains(TYPE_MMS) -> TYPE_MMS
@@ -428,6 +428,9 @@ open class MessageRepositoryImpl @Inject constructor(
 
             cursorToMessage.map(Pair(cursor, CursorToMessage.MessageColumns(cursor))).apply {
                 this.sendAsGroup = sendAsGroup
+                // mark reaction messages hidden before they're first committed, so the raw
+                // reaction bubble never flashes in the conversation
+                this.isEmojiReaction = asReaction
 
                 if (isMms()) {
                     parts = RealmList<MmsPart>().apply {
@@ -446,7 +449,7 @@ open class MessageRepositoryImpl @Inject constructor(
 
     override fun sendNewMessages(
         subId: Int, toAddresses: Collection<String>, body: String,
-        attachments: Collection<Attachment>, sendAsGroup: Boolean, delayMs: Int
+        attachments: Collection<Attachment>, sendAsGroup: Boolean, delayMs: Int, asReaction: Boolean
     ): Collection<Message> {
         Timber.v("sending message(s)")
 
@@ -606,7 +609,7 @@ open class MessageRepositoryImpl @Inject constructor(
             return listOf()
         }
 
-        val message = syncProviderMessage(messageUri, group)
+        val message = syncProviderMessage(messageUri, group, asReaction)
         if (message == null) {
             Timber.v("sync message failed for uri $messageUri")
             return listOf()
@@ -703,8 +706,9 @@ open class MessageRepositoryImpl @Inject constructor(
         }
         val body = reactions.buildReactionBody(emoji, targetText, isRemoval, format)
 
-        // Send it through the normal pipeline (delivery, retry, etc. all handled)
-        val sent = sendNewMessages(subId, listOf(target.address), body, listOf(), false, 0)
+        // Send it through the normal pipeline (delivery, retry, etc. all handled). asReaction hides
+        // the message from the moment it's created so the raw reaction text never flashes on screen.
+        val sent = sendNewMessages(subId, listOf(target.address), body, listOf(), false, 0, asReaction = true)
 
         // Hide the reaction message from the thread and record the reaction locally so it shows
         // on the target bubble without waiting for a re-parse
