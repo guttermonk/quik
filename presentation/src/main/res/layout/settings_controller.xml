@@ -149,6 +149,13 @@
             tools:summary="Automatic" />
 
         <dev.octoshrimpy.quik.common.widget.PreferenceView
+            android:id="@+id/reactionRecents"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:title="@string/settings_reaction_recents_title"
+            tools:summary="3" />
+
+        <dev.octoshrimpy.quik.common.widget.PreferenceView
             android:id="@+id/delayed"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

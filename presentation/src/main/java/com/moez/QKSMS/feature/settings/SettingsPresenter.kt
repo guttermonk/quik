@@ -168,6 +168,19 @@ class SettingsPresenter @Inject constructor(
                 }
             }
 
+        val reactionRecentsLabels = context.resources.getStringArray(R.array.reaction_recents_counts)
+        val reactionRecentsIds = context.resources.getIntArray(R.array.reaction_recents_count_ids)
+        disposables += prefs.reactionRecentsCount.asObservable()
+            .subscribe { reactionRecentsId ->
+                val index = reactionRecentsIds.indexOf(reactionRecentsId).coerceAtLeast(0)
+                newState {
+                    copy(
+                        reactionRecentsSummary = reactionRecentsLabels[index],
+                        reactionRecentsId = reactionRecentsId
+                    )
+                }
+            }
+
         disposables += prefs.disableScreenshots.asObservable()
             .subscribe { enabled -> newState { copy(disableScreenshotsEnabled = enabled) } }
 
@@ -246,6 +259,8 @@ class SettingsPresenter @Inject constructor(
 
                         R.id.reactionFormat -> view.showReactionFormatDialogPicker()
 
+                        R.id.reactionRecents -> view.showReactionRecentsDialogPicker()
+
                         R.id.disableScreenshots -> prefs.disableScreenshots.set(!prefs.disableScreenshots.get())
 
                         R.id.sync -> syncMessages.execute(Unit)
@@ -323,6 +338,10 @@ class SettingsPresenter @Inject constructor(
         view.reactionFormatSelected()
             .autoDisposable(view.scope())
             .subscribe(prefs.reactionSendFormat::set)
+
+        view.reactionRecentsSelected()
+            .autoDisposable(view.scope())
+            .subscribe(prefs.reactionRecentsCount::set)
     }
 
 }

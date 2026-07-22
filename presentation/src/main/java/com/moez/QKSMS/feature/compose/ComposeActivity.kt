@@ -49,7 +49,6 @@ import android.view.MenuItem
 import android.view.View
 import android.view.WindowManager
 import android.widget.EditText
-import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.SeekBar
@@ -62,6 +61,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelProviders
+import com.google.android.flexbox.FlexboxLayout
 import com.google.android.flexbox.FlexboxLayoutManager
 import com.google.android.material.snackbar.Snackbar
 import com.jakewharton.rxbinding2.view.clicks
@@ -756,13 +756,10 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
     private fun showReactionPicker(messageId: Long, anchor: View) {
         reactionPopup?.dismiss()
 
-        val root = layoutInflater.inflate(R.layout.reaction_bar, binding.root, false) as LinearLayout
-        val scroll = root.findViewById<HorizontalScrollView>(R.id.reactionScroll)
-        val container = root.findViewById<LinearLayout>(R.id.reactionBarContainer)
-        val plus = root.findViewById<TextView>(R.id.reactionPlus)
+        val container = layoutInflater.inflate(R.layout.reaction_bar, binding.root, false) as FlexboxLayout
 
         // tint the picker to match the current theme
-        (root.background?.mutate() as? GradientDrawable)
+        (container.background?.mutate() as? GradientDrawable)
             ?.setColor(resolveThemeColor(android.R.attr.windowBackground))
 
         reactionPickerEmojis().forEach { emoji ->
@@ -777,32 +774,30 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
                 })
         }
 
-        // the pinned '+' opens the full system emoji keyboard so any emoji can be used
-        plus.setOnClickListener {
-            reactionPopup?.dismiss()
-            promptForCustomEmoji(messageId)
-        }
+        // the '+' opens the full system emoji keyboard so any emoji can be used
+        container.addView((layoutInflater.inflate(R.layout.reaction_bar_emoji, container, false) as TextView)
+            .apply {
+                text = "+"
+                setOnClickListener {
+                    reactionPopup?.dismiss()
+                    promptForCustomEmoji(messageId)
+                }
+            })
 
         val margin = (resources.displayMetrics.density * 8).toInt()
         val screenWidth = resources.displayMetrics.widthPixels
         val available = screenWidth - (2 * margin)
 
-        // measure the natural size; if the row is wider than the screen, cap the popup to the
-        // available width and let the emoji list scroll while the '+' stays pinned
-        root.measure(
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+        // constrain to the available width so the flexbox wraps onto multiple lines when needed
+        container.measure(
+            View.MeasureSpec.makeMeasureSpec(available, View.MeasureSpec.AT_MOST),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
         )
-        val overflows = root.measuredWidth > available
-        if (overflows) {
-            scroll.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        }
-        val shownWidth = if (overflows) available else root.measuredWidth
-        val popupWidth = if (overflows) available else LinearLayout.LayoutParams.WRAP_CONTENT
+        val shownWidth = container.measuredWidth
 
         val popup = PopupWindow(
-            root,
-            popupWidth,
+            container,
+            shownWidth,
             LinearLayout.LayoutParams.WRAP_CONTENT,
             true
         ).apply {
@@ -814,17 +809,18 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
         anchor.getLocationInWindow(location)
         val x = (location[0] + anchor.width / 2 - shownWidth / 2)
             .coerceIn(margin, (screenWidth - shownWidth - margin).coerceAtLeast(margin))
-        val y = (location[1] - root.measuredHeight).coerceAtLeast(0)
+        val y = (location[1] - container.measuredHeight).coerceAtLeast(0)
 
         popup.showAtLocation(anchor, Gravity.NO_GRAVITY, x, y)
         reactionPopup = popup
     }
 
-    /** Standard tapbacks followed by up to [Preferences.REACTION_RECENTS_MAX] recent emojis */
+    /** Standard tapbacks followed by up to the user's configured number of recent emojis */
     private fun reactionPickerEmojis(): List<String> {
+        val count = prefs.reactionRecentsCount.get().coerceAtLeast(0)
         val recents = recentEmojis()
             .filter { it !in standardReactionEmojis }
-            .take(Preferences.REACTION_RECENTS_MAX)
+            .take(count)
         return standardReactionEmojis + recents
     }
 
@@ -839,7 +835,7 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
         if (emoji in standardReactionEmojis) return
 
         val updated = (listOf(emoji) + recentEmojis().filter { it != emoji })
-            .take(Preferences.REACTION_RECENTS_MAX)
+            .take(Preferences.REACTION_RECENTS_STORE_MAX)
         prefs.reactionRecents.set(updated.joinToString("\n"))
     }
 
