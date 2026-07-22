@@ -762,10 +762,16 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
         (container.background?.mutate() as? GradientDrawable)
             ?.setColor(resolveThemeColor(android.R.attr.windowBackground))
 
+        // Force a fully-opaque text colour: a TextView's text-colour alpha is applied to emoji
+        // glyphs too, and the theme's default text colour is partially transparent, which makes the
+        // emojis look dim.
+        val chipTextColor = resolveThemeColor(android.R.attr.textColorPrimary) or 0xFF000000.toInt()
+
         reactionPickerEmojis().forEach { emoji ->
             container.addView((layoutInflater.inflate(R.layout.reaction_bar_emoji, container, false) as TextView)
                 .apply {
                     text = emoji
+                    setTextColor(chipTextColor)
                     setOnClickListener {
                         reactionSelectedIntent.onNext(messageId to emoji)
                         rememberRecentEmoji(emoji)
@@ -778,6 +784,7 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
         container.addView((layoutInflater.inflate(R.layout.reaction_bar_emoji, container, false) as TextView)
             .apply {
                 text = "+"
+                setTextColor(chipTextColor)
                 setOnClickListener {
                     reactionPopup?.dismiss()
                     promptForCustomEmoji(messageId)
