@@ -27,6 +27,7 @@ import android.content.ActivityNotFoundException
 import android.content.ContentValues
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -40,10 +41,15 @@ import android.view.ContextMenu
 import android.view.DragEvent.ACTION_DRAG_ENDED
 import android.view.DragEvent.ACTION_DRAG_EXITED
 import android.view.DragEvent.ACTION_DROP
+import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.PopupWindow
 import android.widget.SeekBar
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.constraintlayout.widget.ConstraintSet
@@ -69,17 +75,21 @@ import dev.octoshrimpy.quik.common.util.extensions.autoScrollToStart
 import dev.octoshrimpy.quik.common.util.extensions.dpToPx
 import dev.octoshrimpy.quik.common.util.extensions.hideKeyboard
 import dev.octoshrimpy.quik.common.util.extensions.makeToast
+import dev.octoshrimpy.quik.common.util.extensions.resolveThemeColor
 import dev.octoshrimpy.quik.common.util.extensions.scrapViews
 import dev.octoshrimpy.quik.common.util.extensions.setBackgroundTint
 import dev.octoshrimpy.quik.common.util.extensions.setTint
 import dev.octoshrimpy.quik.common.util.extensions.setVisible
 import dev.octoshrimpy.quik.common.util.extensions.showKeyboard
 import dev.octoshrimpy.quik.common.widget.MicInputCloudView
+import dev.octoshrimpy.quik.common.widget.QkContextMenuRecyclerView
 import dev.octoshrimpy.quik.extensions.mapNotNull
 import dev.octoshrimpy.quik.feature.compose.editing.ChipsAdapter
 import dev.octoshrimpy.quik.feature.contacts.ContactsActivity
 import dev.octoshrimpy.quik.model.Attachment
+import dev.octoshrimpy.quik.model.MmsPart
 import dev.octoshrimpy.quik.model.Recipient
+import dev.octoshrimpy.quik.util.Preferences
 import io.reactivex.Observable
 import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.Disposable
@@ -87,6 +97,7 @@ import io.reactivex.schedulers.Schedulers
 import dev.octoshrimpy.quik.databinding.ComposeActivityBinding
 import io.reactivex.subjects.PublishSubject
 import io.reactivex.subjects.Subject
+import java.text.BreakIterator
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -105,6 +116,11 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
     @Inject lateinit var viewModelFactory: ViewModelProvider.Factory
 
     private lateinit var binding: ComposeActivityBinding
+
+    // the currently-showing floating emoji reaction picker, if any
+    private var reactionPopup: PopupWindow? = null
+    // the media part view last long-pressed, used to anchor the reaction picker for media messages
+    private var partContextMenuAnchor: View? = null
 
     override val activityVisibleIntent: Subject<Boolean> = PublishSubject.create()
     override val chipsSelectedIntent: Subject<HashMap<String, String?>> = PublishSubject.create()
@@ -141,6 +157,7 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
     override val clearCurrentMessageIntent: Subject<Boolean> = PublishSubject.create()
     override val messageLinkAskIntent: Subject<Uri> by lazy { messageAdapter.messageLinkClicks }
     override val reactionClickIntent: Subject<Long> by lazy { messageAdapter.reactionClicks }
+    override val reactionSelectedIntent: Subject<Pair<Long, String>> = PublishSubject.create()
     override val speechRecogniserIntent by lazy { binding.speechToTextIcon.clicks() }
     override val shadeIntent by lazy { binding.shadeBackground.clicks() }
     override val recordAudioStartStopRecording: Subject<Boolean> = PublishSubject.create()
@@ -244,6 +261,11 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
                 .mapNotNull { it }
                 .autoDisposable(scope())
                 .subscribe { registerForContextMenu(it) }
+
+            // show the floating emoji reaction picker when a message asks to be reacted to
+            messageAdapter.reactionBarClicks
+                .autoDisposable(scope())
+                .subscribe { (messageId, anchor) -> showReactionPicker(messageId, anchor) }
 
             // drag drop handlers for speech-to-text icon
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
@@ -385,6 +407,10 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
     override fun onPause() {
         super.onPause()
         activityVisibleIntent.onNext(false)
+
+        // avoid leaking the reaction picker window if we're backgrounded while it's open
+        reactionPopup?.dismiss()
+        reactionPopup = null
     }
 
     override fun onDestroy() {
@@ -716,6 +742,124 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
             .show()
     }
 
+    /** The six standard tapback reactions, always shown first in the picker */
+    private val standardReactionEmojis = listOf("❤️", "👍", "👎", "😂", "‼️", "❓")
+
+    /**
+     * Shows the floating emoji reaction picker above [anchor]. Picking an emoji emits it on
+     * [reactionSelectedIntent] for the view model to send.
+     */
+    private fun showReactionPicker(messageId: Long, anchor: View) {
+        reactionPopup?.dismiss()
+
+        val content = layoutInflater.inflate(R.layout.reaction_bar, binding.root, false) as LinearLayout
+
+        // tint the picker to match the current theme
+        (content.background?.mutate() as? GradientDrawable)
+            ?.setColor(resolveThemeColor(android.R.attr.windowBackground))
+
+        val onPicked = { emoji: String ->
+            reactionSelectedIntent.onNext(messageId to emoji)
+            rememberRecentEmoji(emoji)
+            reactionPopup?.dismiss()
+        }
+
+        reactionPickerEmojis().forEach { emoji ->
+            content.addView((layoutInflater.inflate(R.layout.reaction_bar_emoji, content, false) as TextView)
+                .apply {
+                    text = emoji
+                    setOnClickListener { onPicked(emoji) }
+                })
+        }
+
+        // the '+' opens the full system emoji keyboard so any emoji can be used
+        content.addView((layoutInflater.inflate(R.layout.reaction_bar_emoji, content, false) as TextView)
+            .apply {
+                text = "+"
+                setOnClickListener {
+                    reactionPopup?.dismiss()
+                    promptForCustomEmoji(messageId)
+                }
+            })
+
+        val popup = PopupWindow(
+            content,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            true
+        ).apply {
+            isOutsideTouchable = true
+            elevation = resources.displayMetrics.density * 8
+        }
+
+        content.measure(
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        )
+        val location = IntArray(2)
+        anchor.getLocationInWindow(location)
+        val x = location[0] + anchor.width / 2 - content.measuredWidth / 2
+        val y = location[1] - content.measuredHeight
+
+        popup.showAtLocation(anchor, Gravity.NO_GRAVITY, x.coerceAtLeast(0), y.coerceAtLeast(0))
+        reactionPopup = popup
+    }
+
+    /** Standard tapbacks followed by up to [Preferences.REACTION_RECENTS_MAX] recent emojis */
+    private fun reactionPickerEmojis(): List<String> {
+        val recents = recentEmojis()
+            .filter { it !in standardReactionEmojis }
+            .take(Preferences.REACTION_RECENTS_MAX)
+        return standardReactionEmojis + recents
+    }
+
+    private fun recentEmojis(): List<String> =
+        prefs.reactionRecents.get()
+            .split("\n")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+
+    private fun rememberRecentEmoji(emoji: String) {
+        // the standard tapbacks are always shown, so don't waste a recents slot on them
+        if (emoji in standardReactionEmojis) return
+
+        val updated = (listOf(emoji) + recentEmojis().filter { it != emoji })
+            .take(Preferences.REACTION_RECENTS_MAX)
+        prefs.reactionRecents.set(updated.joinToString("\n"))
+    }
+
+    private fun promptForCustomEmoji(messageId: Long) {
+        val input = EditText(this).apply {
+            hint = getString(R.string.compose_reaction_emoji_hint)
+            setSingleLine()
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.compose_reaction_custom_title)
+            .setView(input)
+            .setPositiveButton(R.string.button_continue) { _, _ ->
+                firstEmoji(input.text.toString())?.let { emoji ->
+                    reactionSelectedIntent.onNext(messageId to emoji)
+                    rememberRecentEmoji(emoji)
+                }
+            }
+            .setNegativeButton(R.string.button_cancel, null)
+            .show()
+
+        input.requestFocus()
+    }
+
+    /** Returns the first grapheme cluster (which handles multi-codepoint emoji) of [text], or null */
+    private fun firstEmoji(text: String): String? {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return null
+
+        val iterator = BreakIterator.getCharacterInstance()
+        iterator.setText(trimmed)
+        val end = iterator.next()
+        return if (end == BreakIterator.DONE) trimmed else trimmed.substring(0, end)
+    }
+
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         menuInflater.inflate(R.menu.compose, menu)
         return super.onCreateOptionsMenu(menu)
@@ -736,11 +880,24 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
         menuInfo: ContextMenu.ContextMenuInfo?
     ) {
         super.onCreateContextMenu(menu, v, menuInfo)
+        // remember the touched part view so the reaction picker can anchor to it
+        partContextMenuAnchor = v
         menuInflater.inflate(R.menu.mms_part_menu, menu)
     }
 
     override fun onContextItemSelected(item: MenuItem): Boolean {
         super.onContextItemSelected(item)
+
+        // reacting to a media part is a pure UI action; handle it here (anchored to the part view)
+        if (item.itemId == R.id.reactToPart) {
+            @Suppress("UNCHECKED_CAST")
+            val menuInfo = item.menuInfo as? QkContextMenuRecyclerView.ContextMenuInfo<Long, MmsPart>
+            val messageId = menuInfo?.viewHolderValue?.messageId
+            val anchor = partContextMenuAnchor ?: binding.messageList
+            if (messageId != null) showReactionPicker(messageId, anchor)
+            return true
+        }
+
         contextItemIntent.onNext(item)
         return true
     }

@@ -69,6 +69,8 @@ class SettingsController : QkController<SettingsControllerBinding, SettingsView,
     @Inject lateinit var sendDelayDialog: QkDialog
     @Inject lateinit var mmsSizeDialog: QkDialog
     @Inject lateinit var messageLinkHandlingDialog: QkDialog
+    @Inject lateinit var reactionGestureDialog: QkDialog
+    @Inject lateinit var reactionFormatDialog: QkDialog
 
     @Inject override lateinit var presenter: SettingsPresenter
 
@@ -105,6 +107,8 @@ class SettingsController : QkController<SettingsControllerBinding, SettingsView,
         sendDelayDialog.adapter.setData(R.array.delayed_sending_labels)
         mmsSizeDialog.adapter.setData(R.array.mms_sizes, R.array.mms_sizes_ids)
         messageLinkHandlingDialog.adapter.setData(R.array.messageLinkHandlings, R.array.messageLinkHandling_ids)
+        reactionGestureDialog.adapter.setData(R.array.reaction_gestures, R.array.reaction_gesture_ids)
+        reactionFormatDialog.adapter.setData(R.array.reaction_send_formats, R.array.reaction_send_format_ids)
 
         binding.about.summary = context.getString(R.string.settings_version, BuildConfig.VERSION_NAME)
     }
@@ -141,6 +145,8 @@ class SettingsController : QkController<SettingsControllerBinding, SettingsView,
     override fun mmsSizeSelected(): Observable<Int> = mmsSizeDialog.adapter.menuItemClicks
 
     override fun messageLinkHandlingSelected(): Observable<Int> = messageLinkHandlingDialog.adapter.menuItemClicks
+    override fun reactionGestureSelected(): Observable<Int> = reactionGestureDialog.adapter.menuItemClicks
+    override fun reactionFormatSelected(): Observable<Int> = reactionFormatDialog.adapter.menuItemClicks
 
     override fun render(state: SettingsState) {
         binding.theme.findViewById<View>(R.id.themePreview)?.setBackgroundTint(state.theme)
@@ -185,6 +191,12 @@ class SettingsController : QkController<SettingsControllerBinding, SettingsView,
 
         binding.messsageLinkHandling.summary = state.messageLinkHandlingSummary
         messageLinkHandlingDialog.adapter.selectedItem = state.messageLinkHandlingId
+
+        binding.reactionGesture.summary = state.reactionGestureSummary
+        reactionGestureDialog.adapter.selectedItem = state.reactionGestureId
+
+        binding.reactionFormat.summary = state.reactionFormatSummary
+        reactionFormatDialog.adapter.selectedItem = state.reactionFormatId
 
         binding.disableScreenshots.checkbox?.isChecked = state.disableScreenshotsEnabled
 
@@ -241,6 +253,8 @@ class SettingsController : QkController<SettingsControllerBinding, SettingsView,
     override fun showMmsSizePicker() = mmsSizeDialog.show(activity!!)
 
     override fun showMessageLinkHandlingDialogPicker() = messageLinkHandlingDialog.show(activity!!)
+    override fun showReactionGestureDialogPicker() = reactionGestureDialog.show(activity!!)
+    override fun showReactionFormatDialogPicker() = reactionFormatDialog.show(activity!!)
 
     override fun showSwipeActions() {
         router.pushController(RouterTransaction.with(SwipeActionsController())

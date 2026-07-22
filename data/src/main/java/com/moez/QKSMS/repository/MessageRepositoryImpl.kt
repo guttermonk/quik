@@ -691,6 +691,43 @@ open class MessageRepositoryImpl @Inject constructor(
             ?.let { message -> sendMessage(message) }
             ?: listOf()
 
+    override fun sendReaction(
+        subId: Int, targetMessageId: Long, emoji: String, isRemoval: Boolean
+    ): Collection<Message> {
+        // Read the target's text/address and resolve the wire format up front
+        val target = getUnmanagedMessage(targetMessageId) ?: return listOf()
+        val targetText = target.getText(false)
+
+        val format = Realm.getDefaultInstance().use { realm ->
+            reactions.resolveFormat(target.threadId, realm)
+        }
+        val body = reactions.buildReactionBody(emoji, targetText, isRemoval, format)
+
+        // Send it through the normal pipeline (delivery, retry, etc. all handled)
+        val sent = sendNewMessages(subId, listOf(target.address), body, listOf(), false, 0)
+
+        // Hide the reaction message from the thread and record the reaction locally so it shows
+        // on the target bubble without waiting for a re-parse
+        Realm.getDefaultInstance().use { realm ->
+            realm.executeTransaction { r ->
+                val targetManaged = r.where(Message::class.java)
+                    .equalTo("id", targetMessageId).findFirst()
+                sent.forEach { msg ->
+                    val reactionManaged = r.where(Message::class.java)
+                        .equalTo("id", msg.id).findFirst() ?: return@forEach
+                    reactions.saveEmojiReaction(
+                        reactionManaged,
+                        ParsedEmojiReaction(emoji, targetText, isRemoval, format),
+                        targetManaged,
+                        r,
+                    )
+                }
+            }
+        }
+
+        return sent
+    }
+
     override fun cancelDelayedSmsAlarm(messageId: Long) =
         (context.getSystemService(Context.ALARM_SERVICE) as AlarmManager)
             .cancel(getIntentForDelayedSms(messageId))

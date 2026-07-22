@@ -50,6 +50,10 @@ data class SettingsState(
     val maxMmsSizeId: Int = 100,
     val messageLinkHandlingSummary: String = "Ask before opening",
     val messageLinkHandlingId: Int = 2,
+    val reactionGestureSummary: String = "Long press to react",
+    val reactionGestureId: Int = 0,
+    val reactionFormatSummary: String = "Automatic",
+    val reactionFormatId: Int = 0,
     val disableScreenshotsEnabled: Boolean = false,
     val syncProgress: SyncRepository.SyncProgress = SyncRepository.SyncProgress.Idle
 )

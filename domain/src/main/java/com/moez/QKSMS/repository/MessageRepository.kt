@@ -93,6 +93,15 @@ interface MessageRepository {
 
     fun sendMessage(messageId: Long): Collection<Message>
 
+    /**
+     * Sends an emoji reaction to the message with id [targetMessageId]. The reaction is sent as a
+     * specially-formatted text message (see [EmojiReactionRepository.buildReactionBody]) and is also
+     * recorded locally so it renders immediately. When [isRemoval] is true, an un-react is sent.
+     */
+    fun sendReaction(
+        subId: Int, targetMessageId: Long, emoji: String, isRemoval: Boolean
+    ): Collection<Message>
+
     fun cancelDelayedSmsAlarm(messageId: Long)
 
     fun insertReceivedSms(subId: Int, address: String, body: String, sentTime: Long): Message

@@ -142,6 +142,32 @@ class SettingsPresenter @Inject constructor(
                     )
                 }
             }
+        val reactionGestureLabels = context.resources.getStringArray(R.array.reaction_gestures)
+        val reactionGestureIds = context.resources.getIntArray(R.array.reaction_gesture_ids)
+        disposables += prefs.reactionGesture.asObservable()
+            .subscribe { reactionGestureId ->
+                val index = reactionGestureIds.indexOf(reactionGestureId).coerceAtLeast(0)
+                newState {
+                    copy(
+                        reactionGestureSummary = reactionGestureLabels[index],
+                        reactionGestureId = reactionGestureId
+                    )
+                }
+            }
+
+        val reactionFormatLabels = context.resources.getStringArray(R.array.reaction_send_formats)
+        val reactionFormatIds = context.resources.getIntArray(R.array.reaction_send_format_ids)
+        disposables += prefs.reactionSendFormat.asObservable()
+            .subscribe { reactionFormatId ->
+                val index = reactionFormatIds.indexOf(reactionFormatId).coerceAtLeast(0)
+                newState {
+                    copy(
+                        reactionFormatSummary = reactionFormatLabels[index],
+                        reactionFormatId = reactionFormatId
+                    )
+                }
+            }
+
         disposables += prefs.disableScreenshots.asObservable()
             .subscribe { enabled -> newState { copy(disableScreenshotsEnabled = enabled) } }
 
@@ -216,6 +242,10 @@ class SettingsPresenter @Inject constructor(
 
                         R.id.messsageLinkHandling -> view.showMessageLinkHandlingDialogPicker()
 
+                        R.id.reactionGesture -> view.showReactionGestureDialogPicker()
+
+                        R.id.reactionFormat -> view.showReactionFormatDialogPicker()
+
                         R.id.disableScreenshots -> prefs.disableScreenshots.set(!prefs.disableScreenshots.get())
 
                         R.id.sync -> syncMessages.execute(Unit)
@@ -285,6 +315,14 @@ class SettingsPresenter @Inject constructor(
         view.messageLinkHandlingSelected()
             .autoDisposable(view.scope())
             .subscribe(prefs.messageLinkHandling::set)
+
+        view.reactionGestureSelected()
+            .autoDisposable(view.scope())
+            .subscribe(prefs.reactionGesture::set)
+
+        view.reactionFormatSelected()
+            .autoDisposable(view.scope())
+            .subscribe(prefs.reactionSendFormat::set)
     }
 
 }

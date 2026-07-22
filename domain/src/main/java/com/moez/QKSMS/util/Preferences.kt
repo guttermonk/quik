@@ -84,6 +84,18 @@ class Preferences @Inject constructor(
         const val MESSAGE_LINK_HANDLING_BLOCK = 0
         const val MESSAGE_LINK_HANDLING_ALLOW = 1
         const val MESSAGE_LINK_HANDLING_ASK = 2
+
+        // Wire format used when sending an emoji reaction
+        const val REACTION_FORMAT_AUTO = 0
+        const val REACTION_FORMAT_GOOGLE = 1
+        const val REACTION_FORMAT_IOS = 2
+
+        // Which gesture triggers the reaction picker (the other triggers multi-select)
+        const val REACTION_GESTURE_LONG_PRESS = 0
+        const val REACTION_GESTURE_DOUBLE_TAP = 1
+
+        // Maximum number of recently-used emojis remembered for the reaction picker
+        const val REACTION_RECENTS_MAX = 3
     }
 
     // Internal
@@ -99,6 +111,11 @@ class Preferences @Inject constructor(
 
     // User configurable
     val sendAsGroup = rxPrefs.getBoolean("sendAsGroup", true)
+
+    // Emoji reactions
+    val reactionSendFormat = rxPrefs.getInteger("reactionSendFormat", REACTION_FORMAT_AUTO)
+    val reactionGesture = rxPrefs.getInteger("reactionGesture", REACTION_GESTURE_LONG_PRESS)
+    val reactionRecents = rxPrefs.getString("reactionRecents", "")
     val nightMode = rxPrefs.getInteger("nightMode", when (Build.VERSION.SDK_INT >= 29) {
         true -> NIGHT_MODE_SYSTEM
         false -> NIGHT_MODE_OFF

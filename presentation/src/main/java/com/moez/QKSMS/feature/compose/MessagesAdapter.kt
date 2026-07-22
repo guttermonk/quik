@@ -23,6 +23,7 @@ import android.content.Context
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
+import android.os.SystemClock
 import android.text.Layout
 import android.text.Spannable
 import android.text.SpannableString
@@ -34,6 +35,7 @@ import android.text.style.URLSpan
 import android.text.util.Linkify
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.ProgressBar
@@ -112,6 +114,10 @@ class MessagesAdapter @Inject constructor(
     val partContextMenuRegistrar: Subject<View> = PublishSubject.create()
     val reactionClicks: Subject<Long> = PublishSubject.create()
 
+    // emits (message id, anchor view) when the user asks to react to a message; the anchor view is
+    // used to position the floating reaction picker above the bubble
+    val reactionBarClicks: Subject<Pair<Long, View>> = PublishSubject.create()
+
     var data: Pair<Conversation, RealmResults<Message>>? = null
         set(value) {
             if (field === value) return
@@ -170,24 +176,73 @@ class MessagesAdapter @Inject constructor(
 
         return QkViewHolder(view).apply {
             view.setOnClickListener {
-                getItem(adapterPosition)?.let {
-                    when (toggleSelection(it.id, false)) {
-                        true -> view.isActivated = isSelected(it.id)
-                        false -> {
-                            expanded[it.id] = status.visibility != View.VISIBLE
-                            notifyItemChanged(adapterPosition)
-                        }
+                val id = getItem(adapterPosition)?.id ?: return@setOnClickListener
+
+                // In selection mode, or when double-tap isn't bound to an action, act immediately.
+                // Otherwise defer the single-tap so we can detect a double-tap.
+                if (isSelectionMode()) {
+                    onSingleTap(id, view, status)
+                } else {
+                    val now = SystemClock.uptimeMillis()
+                    if (id == lastClickId && (now - lastClickTime) < doubleTapTimeout) {
+                        lastClickTime = 0
+                        pendingSingleTap?.let { view.removeCallbacks(it) }
+                        onDoubleTap(id, view)
+                    } else {
+                        lastClickId = id
+                        lastClickTime = now
+                        val runnable = Runnable { onSingleTap(id, view, status) }
+                        pendingSingleTap = runnable
+                        view.postDelayed(runnable, doubleTapTimeout)
                     }
                 }
             }
             view.setOnLongClickListener {
-                getItem(adapterPosition)?.let {
-                    toggleSelection(it.id)
-                    view.isActivated = isSelected(it.id)
-                }
+                getItem(adapterPosition)?.let { onLongPress(it.id, view) }
                 true
             }
         }
+    }
+
+    private val doubleTapTimeout = ViewConfiguration.getDoubleTapTimeout().toLong()
+    private var lastClickTime = 0L
+    private var lastClickId = -1L
+    private var pendingSingleTap: Runnable? = null
+
+    /** Whether the react gesture is long-press (vs double-tap); the other gesture multi-selects */
+    private val reactOnLongPress: Boolean
+        get() = prefs.reactionGesture.get() == Preferences.REACTION_GESTURE_LONG_PRESS
+
+    private fun onSingleTap(id: Long, view: View, status: View) {
+        when (toggleSelection(id, false)) {
+            true -> view.isActivated = isSelected(id)
+            false -> {
+                expanded[id] = status.visibility != View.VISIBLE
+                val position = getItemPositionForId(id)
+                if (position != androidx.recyclerview.widget.RecyclerView.NO_POSITION)
+                    notifyItemChanged(position)
+            }
+        }
+    }
+
+    private fun onLongPress(id: Long, view: View) {
+        if (reactOnLongPress) reactionBarClicks.onNext(id to view)
+        else enterSelection(id, view)
+    }
+
+    private fun onDoubleTap(id: Long, view: View) {
+        if (reactOnLongPress) enterSelection(id, view)
+        else reactionBarClicks.onNext(id to view)
+    }
+
+    private fun enterSelection(id: Long, view: View) {
+        toggleSelection(id)
+        view.isActivated = isSelected(id)
+    }
+
+    private fun getItemPositionForId(id: Long): Int {
+        for (i in 0 until itemCount) if (getItem(i)?.id == id) return i
+        return androidx.recyclerview.widget.RecyclerView.NO_POSITION
     }
 
     override fun onBindViewHolder(holder: QkViewHolder, position: Int) {
