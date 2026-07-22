@@ -487,15 +487,14 @@ class MessagesAdapter @Inject constructor(
         val hasReactions = reactions.isNotEmpty()
 
         if (hasReactions) {
-            val uniqueEmojis = reactions.map { it.emoji }.distinct()
-            val totalCount = reactions.size
-
-            // Show unique emojis followed by total count
-            val reactionText = if (totalCount == 1) {
-                uniqueEmojis.first()
-            } else {
-                "${uniqueEmojis.joinToString("")}\u00A0$totalCount"
-            }
+            // Show each distinct emoji (in first-seen order), with a count after it only when that
+            // same emoji was used more than once, eg. "\uD83D\uDC4D\u2764\uFE0F2\uD83D\uDE02"
+            val reactionText = reactions
+                .groupBy { it.emoji }
+                .entries
+                .joinToString(separator = "\u2002") { (emoji, list) ->
+                    if (list.size > 1) "$emoji${list.size}" else emoji
+                }
 
             reactionTextView.text = reactionText
             reactionTextView.setOnClickListener { reactionClicks.onNext(message.id) }
