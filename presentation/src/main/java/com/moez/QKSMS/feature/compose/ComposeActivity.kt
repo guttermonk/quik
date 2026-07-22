@@ -107,6 +107,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.math.ceil
 import javax.inject.Inject
 
 
@@ -767,40 +768,65 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
         // emojis look dim.
         val chipTextColor = resolveThemeColor(android.R.attr.textColorPrimary) or 0xFF000000.toInt()
 
-        reactionPickerEmojis().forEach { emoji ->
-            container.addView((layoutInflater.inflate(R.layout.reaction_bar_emoji, container, false) as TextView)
+        val chips = mutableListOf<TextView>()
+
+        val addChip = { label: String, onClick: () -> Unit ->
+            val chip = (layoutInflater.inflate(R.layout.reaction_bar_emoji, container, false) as TextView)
                 .apply {
-                    text = emoji
+                    text = label
                     setTextColor(chipTextColor)
-                    setOnClickListener {
-                        reactionSelectedIntent.onNext(messageId to emoji)
-                        rememberRecentEmoji(emoji)
-                        reactionPopup?.dismiss()
-                    }
-                })
+                    setOnClickListener { onClick() }
+                }
+            chips.add(chip)
+            container.addView(chip)
+        }
+
+        reactionPickerEmojis().forEach { emoji ->
+            addChip(emoji) {
+                reactionSelectedIntent.onNext(messageId to emoji)
+                rememberRecentEmoji(emoji)
+                reactionPopup?.dismiss()
+            }
         }
 
         // the '+' opens the full system emoji keyboard so any emoji can be used
-        container.addView((layoutInflater.inflate(R.layout.reaction_bar_emoji, container, false) as TextView)
-            .apply {
-                text = "+"
-                setTextColor(chipTextColor)
-                setOnClickListener {
-                    reactionPopup?.dismiss()
-                    promptForCustomEmoji(messageId)
-                }
-            })
+        addChip("+") {
+            reactionPopup?.dismiss()
+            promptForCustomEmoji(messageId)
+        }
 
         val margin = (resources.displayMetrics.density * 8).toInt()
         val screenWidth = resources.displayMetrics.widthPixels
         val available = screenWidth - (2 * margin)
 
-        // constrain to the available width so the flexbox wraps onto multiple lines when needed
+        // Give every chip a uniform width, then work out a balanced number of chips per row so a
+        // wrapped picker doesn't leave a near-empty last row (eg. 8 + 1). We spread the chips as
+        // evenly as possible across however many rows are needed at the available width.
+        var chipWidth = 0
+        chips.forEach { chip ->
+            chip.measure(
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            )
+            chipWidth = maxOf(chipWidth, chip.measuredWidth)
+        }
+        val paddingH = container.paddingLeft + container.paddingRight
+        val innerAvailable = (available - paddingH).coerceAtLeast(chipWidth)
+        val maxPerRow = (innerAvailable / chipWidth).coerceAtLeast(1)
+        val rowCount = ceil(chips.size.toDouble() / maxPerRow).toInt().coerceAtLeast(1)
+        val perRow = ceil(chips.size.toDouble() / rowCount).toInt().coerceAtLeast(1)
+
+        chips.forEach { chip ->
+            chip.layoutParams = FlexboxLayout.LayoutParams(chipWidth, FlexboxLayout.LayoutParams.WRAP_CONTENT)
+        }
+
+        // a couple of pixels of slack so rounding never bumps a chip onto the next row
+        val shownWidth = perRow * chipWidth + paddingH + 2
+
         container.measure(
-            View.MeasureSpec.makeMeasureSpec(available, View.MeasureSpec.AT_MOST),
+            View.MeasureSpec.makeMeasureSpec(shownWidth, View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
         )
-        val shownWidth = container.measuredWidth
 
         val popup = PopupWindow(
             container,
