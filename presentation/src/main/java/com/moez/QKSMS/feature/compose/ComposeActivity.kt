@@ -36,6 +36,8 @@ import android.provider.ContactsContract
 import android.provider.MediaStore
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.text.Editable
+import android.text.TextWatcher
 import android.text.format.DateFormat
 import android.view.ContextMenu
 import android.view.DragEvent.ACTION_DRAG_ENDED
@@ -45,7 +47,9 @@ import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.view.WindowManager
 import android.widget.EditText
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.SeekBar
@@ -752,39 +756,53 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
     private fun showReactionPicker(messageId: Long, anchor: View) {
         reactionPopup?.dismiss()
 
-        val content = layoutInflater.inflate(R.layout.reaction_bar, binding.root, false) as LinearLayout
+        val root = layoutInflater.inflate(R.layout.reaction_bar, binding.root, false) as LinearLayout
+        val scroll = root.findViewById<HorizontalScrollView>(R.id.reactionScroll)
+        val container = root.findViewById<LinearLayout>(R.id.reactionBarContainer)
+        val plus = root.findViewById<TextView>(R.id.reactionPlus)
 
         // tint the picker to match the current theme
-        (content.background?.mutate() as? GradientDrawable)
+        (root.background?.mutate() as? GradientDrawable)
             ?.setColor(resolveThemeColor(android.R.attr.windowBackground))
 
-        val onPicked = { emoji: String ->
-            reactionSelectedIntent.onNext(messageId to emoji)
-            rememberRecentEmoji(emoji)
-            reactionPopup?.dismiss()
-        }
-
         reactionPickerEmojis().forEach { emoji ->
-            content.addView((layoutInflater.inflate(R.layout.reaction_bar_emoji, content, false) as TextView)
+            container.addView((layoutInflater.inflate(R.layout.reaction_bar_emoji, container, false) as TextView)
                 .apply {
                     text = emoji
-                    setOnClickListener { onPicked(emoji) }
+                    setOnClickListener {
+                        reactionSelectedIntent.onNext(messageId to emoji)
+                        rememberRecentEmoji(emoji)
+                        reactionPopup?.dismiss()
+                    }
                 })
         }
 
-        // the '+' opens the full system emoji keyboard so any emoji can be used
-        content.addView((layoutInflater.inflate(R.layout.reaction_bar_emoji, content, false) as TextView)
-            .apply {
-                text = "+"
-                setOnClickListener {
-                    reactionPopup?.dismiss()
-                    promptForCustomEmoji(messageId)
-                }
-            })
+        // the pinned '+' opens the full system emoji keyboard so any emoji can be used
+        plus.setOnClickListener {
+            reactionPopup?.dismiss()
+            promptForCustomEmoji(messageId)
+        }
+
+        val margin = (resources.displayMetrics.density * 8).toInt()
+        val screenWidth = resources.displayMetrics.widthPixels
+        val available = screenWidth - (2 * margin)
+
+        // measure the natural size; if the row is wider than the screen, cap the popup to the
+        // available width and let the emoji list scroll while the '+' stays pinned
+        root.measure(
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        )
+        val overflows = root.measuredWidth > available
+        if (overflows) {
+            scroll.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val shownWidth = if (overflows) available else root.measuredWidth
+        val popupWidth = if (overflows) available else LinearLayout.LayoutParams.WRAP_CONTENT
 
         val popup = PopupWindow(
-            content,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
+            root,
+            popupWidth,
             LinearLayout.LayoutParams.WRAP_CONTENT,
             true
         ).apply {
@@ -792,16 +810,13 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
             elevation = resources.displayMetrics.density * 8
         }
 
-        content.measure(
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-        )
         val location = IntArray(2)
         anchor.getLocationInWindow(location)
-        val x = location[0] + anchor.width / 2 - content.measuredWidth / 2
-        val y = location[1] - content.measuredHeight
+        val x = (location[0] + anchor.width / 2 - shownWidth / 2)
+            .coerceIn(margin, (screenWidth - shownWidth - margin).coerceAtLeast(margin))
+        val y = (location[1] - root.measuredHeight).coerceAtLeast(0)
 
-        popup.showAtLocation(anchor, Gravity.NO_GRAVITY, x.coerceAtLeast(0), y.coerceAtLeast(0))
+        popup.showAtLocation(anchor, Gravity.NO_GRAVITY, x, y)
         reactionPopup = popup
     }
 
@@ -834,18 +849,29 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
             setSingleLine()
         }
 
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.compose_reaction_custom_title)
             .setView(input)
-            .setPositiveButton(R.string.button_continue) { _, _ ->
-                firstEmoji(input.text.toString())?.let { emoji ->
-                    reactionSelectedIntent.onNext(messageId to emoji)
-                    rememberRecentEmoji(emoji)
-                }
-            }
             .setNegativeButton(R.string.button_cancel, null)
-            .show()
+            .create()
 
+        // pop the keyboard automatically so the user can type an emoji straight away
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+
+        // submit automatically as soon as an emoji is typed, then dismiss
+        input.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                val emoji = firstEmoji(s?.toString() ?: "") ?: return
+                input.removeTextChangedListener(this)
+                reactionSelectedIntent.onNext(messageId to emoji)
+                rememberRecentEmoji(emoji)
+                dialog.dismiss()
+            }
+        })
+
+        dialog.show()
         input.requestFocus()
     }
 
