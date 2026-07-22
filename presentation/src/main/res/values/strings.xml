@@ -277,7 +277,7 @@
     <string name="settings_system_font_title">Use system font</string>
     <string name="settings_system_show_stt_title">Show the speech-to-text button</string>
     <string name="settings_auto_emoji_title">Automatic emoji</string>
-    <string name="settings_reaction_gesture_title">Reaction gesture</string>
+    <string name="settings_reaction_gesture_title">Message gestures</string>
     <string name="settings_reaction_format_title">Reaction send format</string>
     <string name="settings_reaction_recents_title">Recent emojis in picker</string>
     <string name="settings_notifications_title">Notifications</string>
@@ -592,8 +592,8 @@
     </integer-array>
 
     <string-array name="reaction_gestures">
-        <item>Long press to react</item>
-        <item>Double tap to react</item>
+        <item>Long-press to react, double-tap to select</item>
+        <item>Double-tap to react, long-press to select</item>
     </string-array>
 
     <integer-array name="reaction_gesture_ids">
