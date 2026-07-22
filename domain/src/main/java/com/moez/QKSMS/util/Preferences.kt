@@ -94,8 +94,12 @@ class Preferences @Inject constructor(
         const val REACTION_GESTURE_LONG_PRESS = 0
         const val REACTION_GESTURE_DOUBLE_TAP = 1
 
-        // Maximum number of recently-used emojis remembered for the reaction picker
-        const val REACTION_RECENTS_MAX = 3
+        // Default number of recently-used emojis shown in the reaction picker
+        const val REACTION_RECENTS_DEFAULT = 3
+
+        // How many recently-used emojis we persist (>= the largest selectable display count) so
+        // history survives when the user increases the display count
+        const val REACTION_RECENTS_STORE_MAX = 10
     }
 
     // Internal
@@ -116,6 +120,7 @@ class Preferences @Inject constructor(
     val reactionSendFormat = rxPrefs.getInteger("reactionSendFormat", REACTION_FORMAT_AUTO)
     val reactionGesture = rxPrefs.getInteger("reactionGesture", REACTION_GESTURE_LONG_PRESS)
     val reactionRecents = rxPrefs.getString("reactionRecents", "")
+    val reactionRecentsCount = rxPrefs.getInteger("reactionRecentsCount", REACTION_RECENTS_DEFAULT)
     val nightMode = rxPrefs.getInteger("nightMode", when (Build.VERSION.SDK_INT >= 29) {
         true -> NIGHT_MODE_SYSTEM
         false -> NIGHT_MODE_OFF

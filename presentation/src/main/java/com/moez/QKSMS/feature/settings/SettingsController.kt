@@ -71,6 +71,7 @@ class SettingsController : QkController<SettingsControllerBinding, SettingsView,
     @Inject lateinit var messageLinkHandlingDialog: QkDialog
     @Inject lateinit var reactionGestureDialog: QkDialog
     @Inject lateinit var reactionFormatDialog: QkDialog
+    @Inject lateinit var reactionRecentsDialog: QkDialog
 
     @Inject override lateinit var presenter: SettingsPresenter
 
@@ -109,6 +110,7 @@ class SettingsController : QkController<SettingsControllerBinding, SettingsView,
         messageLinkHandlingDialog.adapter.setData(R.array.messageLinkHandlings, R.array.messageLinkHandling_ids)
         reactionGestureDialog.adapter.setData(R.array.reaction_gestures, R.array.reaction_gesture_ids)
         reactionFormatDialog.adapter.setData(R.array.reaction_send_formats, R.array.reaction_send_format_ids)
+        reactionRecentsDialog.adapter.setData(R.array.reaction_recents_counts, R.array.reaction_recents_count_ids)
 
         binding.about.summary = context.getString(R.string.settings_version, BuildConfig.VERSION_NAME)
     }
@@ -147,6 +149,7 @@ class SettingsController : QkController<SettingsControllerBinding, SettingsView,
     override fun messageLinkHandlingSelected(): Observable<Int> = messageLinkHandlingDialog.adapter.menuItemClicks
     override fun reactionGestureSelected(): Observable<Int> = reactionGestureDialog.adapter.menuItemClicks
     override fun reactionFormatSelected(): Observable<Int> = reactionFormatDialog.adapter.menuItemClicks
+    override fun reactionRecentsSelected(): Observable<Int> = reactionRecentsDialog.adapter.menuItemClicks
 
     override fun render(state: SettingsState) {
         binding.theme.findViewById<View>(R.id.themePreview)?.setBackgroundTint(state.theme)
@@ -197,6 +200,9 @@ class SettingsController : QkController<SettingsControllerBinding, SettingsView,
 
         binding.reactionFormat.summary = state.reactionFormatSummary
         reactionFormatDialog.adapter.selectedItem = state.reactionFormatId
+
+        binding.reactionRecents.summary = state.reactionRecentsSummary
+        reactionRecentsDialog.adapter.selectedItem = state.reactionRecentsId
 
         binding.disableScreenshots.checkbox?.isChecked = state.disableScreenshotsEnabled
 
@@ -255,6 +261,7 @@ class SettingsController : QkController<SettingsControllerBinding, SettingsView,
     override fun showMessageLinkHandlingDialogPicker() = messageLinkHandlingDialog.show(activity!!)
     override fun showReactionGestureDialogPicker() = reactionGestureDialog.show(activity!!)
     override fun showReactionFormatDialogPicker() = reactionFormatDialog.show(activity!!)
+    override fun showReactionRecentsDialogPicker() = reactionRecentsDialog.show(activity!!)
 
     override fun showSwipeActions() {
         router.pushController(RouterTransaction.with(SwipeActionsController())

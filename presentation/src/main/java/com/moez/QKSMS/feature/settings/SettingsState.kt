@@ -54,6 +54,8 @@ data class SettingsState(
     val reactionGestureId: Int = 0,
     val reactionFormatSummary: String = "Automatic",
     val reactionFormatId: Int = 0,
+    val reactionRecentsSummary: String = "3",
+    val reactionRecentsId: Int = 3,
     val disableScreenshotsEnabled: Boolean = false,
     val syncProgress: SyncRepository.SyncProgress = SyncRepository.SyncProgress.Idle
 )

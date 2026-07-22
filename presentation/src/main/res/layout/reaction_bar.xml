@@ -17,50 +17,16 @@
   ~ You should have received a copy of the GNU General Public License
   ~ along with QUIK.  If not, see <http://www.gnu.org/licenses/>.
   -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/reactionBarRoot"
+<com.google.android.flexbox.FlexboxLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/reactionBarContainer"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:orientation="horizontal"
     android:background="@drawable/reaction_bar_background"
     android:elevation="8dp"
-    android:gravity="center_vertical"
     android:paddingStart="4dp"
     android:paddingEnd="4dp"
     android:paddingTop="2dp"
-    android:paddingBottom="2dp">
-
-    <!-- scrollable list of default + recent emojis -->
-    <HorizontalScrollView
-        android:id="@+id/reactionScroll"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:overScrollMode="never"
-        android:scrollbars="none">
-
-        <LinearLayout
-            android:id="@+id/reactionBarContainer"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal" />
-
-    </HorizontalScrollView>
-
-    <!-- the '+' stays pinned so it is always reachable, even when the list overflows -->
-    <TextView
-        android:id="@+id/reactionPlus"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:clickable="true"
-        android:focusable="true"
-        android:gravity="center"
-        android:minWidth="44dp"
-        android:minHeight="44dp"
-        android:paddingStart="6dp"
-        android:paddingEnd="6dp"
-        android:text="+"
-        android:textSize="24sp" />
-
-</LinearLayout>
+    android:paddingBottom="2dp"
+    app:alignItems="center"
+    app:flexWrap="wrap" />
