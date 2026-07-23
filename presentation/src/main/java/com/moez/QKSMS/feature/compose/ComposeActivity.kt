@@ -58,6 +58,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.isVisible
 import androidx.emoji2.emojipicker.EmojiPickerView
 import androidx.lifecycle.ViewModelProvider
@@ -919,10 +920,20 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
-        dialog.window?.setLayout(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.MATCH_PARENT
-        )
+        dialog.window?.let { dialogWindow ->
+            dialogWindow.setLayout(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            // The full-screen dialog window would otherwise recolour the system bars; copy the
+            // activity's bar colours and light/dark icon appearance so they look unchanged.
+            dialogWindow.statusBarColor = window.statusBarColor
+            dialogWindow.navigationBarColor = window.navigationBarColor
+            val activityBars = WindowInsetsControllerCompat(window, window.decorView)
+            val dialogBars = WindowInsetsControllerCompat(dialogWindow, dialogWindow.decorView)
+            dialogBars.isAppearanceLightStatusBars = activityBars.isAppearanceLightStatusBars
+            dialogBars.isAppearanceLightNavigationBars = activityBars.isAppearanceLightNavigationBars
+        }
         dialog.show()
     }
 
