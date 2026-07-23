@@ -45,8 +45,10 @@ import android.view.DragEvent.ACTION_DROP
 import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.SeekBar
@@ -876,30 +878,51 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
         // needs a Material3 theme for its colours, and a plain fixed-height dialog (rather than a
         // bottom sheet) gives its internal grid an unambiguous bounded viewport so it scrolls.
         val dialog = Dialog(this, R.style.ReactionEmojiPickerTheme)
-        // tapping or swiping in the dimmed area above the drawer dismisses it; touches within the
-        // drawer go to the grid and scroll it
-        dialog.setCanceledOnTouchOutside(true)
+        val drawerHeight = (resources.displayMetrics.heightPixels * 0.7).toInt()
+
         val picker = EmojiPickerView(dialog.context).apply {
+            // opaque surface background since the window itself is transparent
+            setBackgroundColor(dialog.context.resolveThemeColor(com.google.android.material.R.attr.colorSurface))
             setOnEmojiPickedListener { item ->
                 reactionSelectedIntent.onNext(messageId to item.emoji)
                 rememberRecentEmoji(item.emoji)
                 dialog.dismiss()
             }
         }
+
+        // Full-screen root: a dim scrim with the drawer pinned to the bottom. A gesture that begins
+        // above the drawer is captured here (so it dismisses even if it travels down into the
+        // drawer), while a gesture that begins inside the drawer falls through to the grid so it
+        // scrolls.
+        val root = object : FrameLayout(dialog.context) {
+            override fun onInterceptTouchEvent(ev: MotionEvent): Boolean =
+                ev.actionMasked == MotionEvent.ACTION_DOWN && ev.y < picker.top
+
+            override fun onTouchEvent(ev: MotionEvent): Boolean {
+                if (ev.actionMasked == MotionEvent.ACTION_UP) dialog.dismiss()
+                return true
+            }
+        }.apply {
+            setBackgroundColor(0x80000000.toInt())
+            addView(
+                picker,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT, drawerHeight, Gravity.BOTTOM
+                )
+            )
+        }
+
         dialog.setContentView(
-            picker,
+            root,
             ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
-        dialog.window?.apply {
-            setLayout(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                (resources.displayMetrics.heightPixels * 0.7).toInt()
-            )
-            setGravity(Gravity.BOTTOM)
-        }
+        dialog.window?.setLayout(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
         dialog.show()
     }
 

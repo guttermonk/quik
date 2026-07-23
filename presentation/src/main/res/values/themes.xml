@@ -92,13 +92,15 @@
       viewport.
     -->
     <style name="ReactionEmojiPickerTheme" parent="Theme.Material3.DayNight">
-        <!-- Make the full DayNight theme behave as a floating, fixed-height dialog so setLayout
-             sizes the window (and the grid gets a bounded, scrollable viewport). The base DayNight
-             theme follows the app's night mode correctly, unlike the .Dialog variant. -->
-        <item name="android:windowIsFloating">true</item>
+        <!-- Full-screen translucent window: the emoji drawer is pinned to the bottom over a dim
+             scrim we draw ourselves, so a swipe that starts above the drawer and travels into it
+             still dismisses (the whole gesture stays in one view hierarchy). The base DayNight
+             theme keeps EmojiPickerView following the app's night mode. -->
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowNoTitle">true</item>
         <item name="android:windowCloseOnTouchOutside">true</item>
-        <item name="android:backgroundDimEnabled">true</item>
-        <item name="android:windowBackground">?attr/colorSurface</item>
     </style>
 
 </resources>
