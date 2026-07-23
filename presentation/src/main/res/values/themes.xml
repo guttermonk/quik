@@ -85,10 +85,14 @@
     <style name="PopupTheme.Black" />
 
     <!--
-      Material3 theme used only for the emoji reaction picker bottom sheet. EmojiPickerView reads
-      Material3 colour attributes, which the app's AppCompat themes don't provide. DayNight follows
-      the app's night-mode setting via the -night resource qualifier.
+      Material3 (floating) dialog theme used only for the emoji reaction picker. EmojiPickerView
+      reads Material3 colour attributes, which the app's AppCompat themes don't provide. DayNight
+      follows the app's night-mode setting via the -night resource qualifier. A floating dialog
+      theme lets us pin the window to a fixed height so the emoji grid gets a bounded, scrollable
+      viewport.
     -->
-    <style name="ReactionEmojiPickerTheme" parent="Theme.Material3.DayNight" />
+    <style name="ReactionEmojiPickerTheme" parent="Theme.Material3.DayNight.Dialog">
+        <item name="android:windowCloseOnTouchOutside">true</item>
+    </style>
 
 </resources>

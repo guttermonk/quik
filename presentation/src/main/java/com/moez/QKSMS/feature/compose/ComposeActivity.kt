@@ -22,6 +22,7 @@ import android.Manifest
 import android.animation.LayoutTransition
 import android.app.Activity
 import android.app.DatePickerDialog
+import android.app.Dialog
 import android.app.TimePickerDialog
 import android.content.ActivityNotFoundException
 import android.content.ContentValues
@@ -42,7 +43,6 @@ import android.view.DragEvent.ACTION_DRAG_ENDED
 import android.view.DragEvent.ACTION_DRAG_EXITED
 import android.view.DragEvent.ACTION_DROP
 import android.view.Gravity
-import android.view.ContextThemeWrapper
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -62,8 +62,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelProviders
 import com.google.android.flexbox.FlexboxLayout
 import com.google.android.flexbox.FlexboxLayoutManager
-import com.google.android.material.bottomsheet.BottomSheetBehavior
-import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.snackbar.Snackbar
 import com.jakewharton.rxbinding2.view.clicks
 import com.jakewharton.rxbinding2.widget.textChanges
@@ -873,41 +871,31 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
     }
 
     private fun promptForCustomEmoji(messageId: Long) {
-        // Show a full emoji grid picker (categorised, searchable, tracks its own recents) rather
-        // than relying on the system keyboard's emoji tab, which can't be opened programmatically.
-        // EmojiPickerView needs a Material3 theme for its colours; wrap in one that follows the
-        // app's day/night setting so it isn't unstyled (white-on-white) on a dark theme.
-        val themedContext = ContextThemeWrapper(this, R.style.ReactionEmojiPickerTheme)
-        val dialog = BottomSheetDialog(themedContext)
-        val picker = EmojiPickerView(themedContext).apply {
-            // fill the sheet; the sheet itself is given a fixed height below so the grid gets a
-            // bounded viewport to scroll within
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
+        // Show a full emoji grid picker (categorised, tracks its own recents) rather than relying on
+        // the system keyboard's emoji tab, which can't be opened programmatically. EmojiPickerView
+        // needs a Material3 theme for its colours, and a plain fixed-height dialog (rather than a
+        // bottom sheet) gives its internal grid an unambiguous bounded viewport so it scrolls.
+        val dialog = Dialog(this, R.style.ReactionEmojiPickerTheme)
+        val picker = EmojiPickerView(dialog.context).apply {
             setOnEmojiPickedListener { item ->
                 reactionSelectedIntent.onNext(messageId to item.emoji)
                 rememberRecentEmoji(item.emoji)
                 dialog.dismiss()
             }
         }
-        dialog.setContentView(picker)
-
-        // Force the bottom-sheet container to a fixed height (its default wrap_content lets the
-        // grid expand to its full content height, so it never scrolls). Expanding + skipCollapsed
-        // then lets vertical drags scroll the grid rather than move the sheet.
-        dialog.setOnShowListener {
-            val sheet = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
-            if (sheet != null) {
-                sheet.layoutParams = sheet.layoutParams.apply {
-                    height = (resources.displayMetrics.heightPixels * 0.7).toInt()
-                }
-                BottomSheetBehavior.from(sheet).apply {
-                    state = BottomSheetBehavior.STATE_EXPANDED
-                    skipCollapsed = true
-                }
-            }
+        dialog.setContentView(
+            picker,
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+        dialog.window?.apply {
+            setLayout(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                (resources.displayMetrics.heightPixels * 0.7).toInt()
+            )
+            setGravity(Gravity.BOTTOM)
         }
         dialog.show()
     }
