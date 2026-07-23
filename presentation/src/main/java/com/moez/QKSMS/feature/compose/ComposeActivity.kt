@@ -876,6 +876,9 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
         // needs a Material3 theme for its colours, and a plain fixed-height dialog (rather than a
         // bottom sheet) gives its internal grid an unambiguous bounded viewport so it scrolls.
         val dialog = Dialog(this, R.style.ReactionEmojiPickerTheme)
+        // tapping or swiping in the dimmed area above the drawer dismisses it; touches within the
+        // drawer go to the grid and scroll it
+        dialog.setCanceledOnTouchOutside(true)
         val picker = EmojiPickerView(dialog.context).apply {
             setOnEmojiPickedListener { item ->
                 reactionSelectedIntent.onNext(messageId to item.emoji)

@@ -91,8 +91,14 @@
       theme lets us pin the window to a fixed height so the emoji grid gets a bounded, scrollable
       viewport.
     -->
-    <style name="ReactionEmojiPickerTheme" parent="Theme.Material3.DayNight.Dialog">
+    <style name="ReactionEmojiPickerTheme" parent="Theme.Material3.DayNight">
+        <!-- Make the full DayNight theme behave as a floating, fixed-height dialog so setLayout
+             sizes the window (and the grid gets a bounded, scrollable viewport). The base DayNight
+             theme follows the app's night mode correctly, unlike the .Dialog variant. -->
+        <item name="android:windowIsFloating">true</item>
         <item name="android:windowCloseOnTouchOutside">true</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:windowBackground">?attr/colorSurface</item>
     </style>
 
 </resources>
