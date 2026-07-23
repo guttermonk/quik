@@ -36,8 +36,6 @@ import android.provider.ContactsContract
 import android.provider.MediaStore
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import android.text.Editable
-import android.text.TextWatcher
 import android.text.format.DateFormat
 import android.view.ContextMenu
 import android.view.DragEvent.ACTION_DRAG_ENDED
@@ -47,8 +45,7 @@ import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
-import android.view.WindowManager
-import android.widget.EditText
+import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.SeekBar
@@ -59,10 +56,12 @@ import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
+import androidx.emoji2.emojipicker.EmojiPickerView
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelProviders
 import com.google.android.flexbox.FlexboxLayout
 import com.google.android.flexbox.FlexboxLayoutManager
+import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.snackbar.Snackbar
 import com.jakewharton.rxbinding2.view.clicks
 import com.jakewharton.rxbinding2.widget.textChanges
@@ -101,7 +100,6 @@ import io.reactivex.schedulers.Schedulers
 import dev.octoshrimpy.quik.databinding.ComposeActivityBinding
 import io.reactivex.subjects.PublishSubject
 import io.reactivex.subjects.Subject
-import java.text.BreakIterator
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -873,46 +871,22 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
     }
 
     private fun promptForCustomEmoji(messageId: Long) {
-        val input = EditText(this).apply {
-            hint = getString(R.string.compose_reaction_emoji_hint)
-            setSingleLine()
-        }
-
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(R.string.compose_reaction_custom_title)
-            .setView(input)
-            .setNegativeButton(R.string.button_cancel, null)
-            .create()
-
-        // pop the keyboard automatically so the user can type an emoji straight away
-        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
-
-        // submit automatically as soon as an emoji is typed, then dismiss
-        input.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                val emoji = firstEmoji(s?.toString() ?: "") ?: return
-                input.removeTextChangedListener(this)
-                reactionSelectedIntent.onNext(messageId to emoji)
-                rememberRecentEmoji(emoji)
+        // Show a full emoji grid picker (categorised, searchable, tracks its own recents) rather
+        // than relying on the system keyboard's emoji tab, which can't be opened programmatically.
+        val dialog = BottomSheetDialog(this)
+        val picker = EmojiPickerView(this).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                (resources.displayMetrics.density * 360).toInt()
+            )
+            setOnEmojiPickedListener { item ->
+                reactionSelectedIntent.onNext(messageId to item.emoji)
+                rememberRecentEmoji(item.emoji)
                 dialog.dismiss()
             }
-        })
-
+        }
+        dialog.setContentView(picker)
         dialog.show()
-        input.requestFocus()
-    }
-
-    /** Returns the first grapheme cluster (which handles multi-codepoint emoji) of [text], or null */
-    private fun firstEmoji(text: String): String? {
-        val trimmed = text.trim()
-        if (trimmed.isEmpty()) return null
-
-        val iterator = BreakIterator.getCharacterInstance()
-        iterator.setText(trimmed)
-        val end = iterator.next()
-        return if (end == BreakIterator.DONE) trimmed else trimmed.substring(0, end)
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
