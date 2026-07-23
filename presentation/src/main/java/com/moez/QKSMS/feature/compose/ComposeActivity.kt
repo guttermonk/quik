@@ -62,6 +62,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelProviders
 import com.google.android.flexbox.FlexboxLayout
 import com.google.android.flexbox.FlexboxLayoutManager
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.snackbar.Snackbar
 import com.jakewharton.rxbinding2.view.clicks
@@ -879,9 +880,10 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
         val themedContext = ContextThemeWrapper(this, R.style.ReactionEmojiPickerTheme)
         val dialog = BottomSheetDialog(themedContext)
         val picker = EmojiPickerView(themedContext).apply {
+            // A tall, definite height gives the internal grid a bounded viewport to scroll within
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                (resources.displayMetrics.density * 360).toInt()
+                (resources.displayMetrics.heightPixels * 0.6).toInt()
             )
             setOnEmojiPickedListener { item ->
                 reactionSelectedIntent.onNext(messageId to item.emoji)
@@ -890,6 +892,12 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
             }
         }
         dialog.setContentView(picker)
+        // Expand fully and skip the collapsed state so vertical drags scroll the emoji grid instead
+        // of dragging the sheet
+        dialog.behavior.apply {
+            state = BottomSheetBehavior.STATE_EXPANDED
+            skipCollapsed = true
+        }
         dialog.show()
     }
 
