@@ -880,10 +880,11 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
         val themedContext = ContextThemeWrapper(this, R.style.ReactionEmojiPickerTheme)
         val dialog = BottomSheetDialog(themedContext)
         val picker = EmojiPickerView(themedContext).apply {
-            // A tall, definite height gives the internal grid a bounded viewport to scroll within
+            // fill the sheet; the sheet itself is given a fixed height below so the grid gets a
+            // bounded viewport to scroll within
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                (resources.displayMetrics.heightPixels * 0.6).toInt()
+                ViewGroup.LayoutParams.MATCH_PARENT
             )
             setOnEmojiPickedListener { item ->
                 reactionSelectedIntent.onNext(messageId to item.emoji)
@@ -892,11 +893,21 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
             }
         }
         dialog.setContentView(picker)
-        // Expand fully and skip the collapsed state so vertical drags scroll the emoji grid instead
-        // of dragging the sheet
-        dialog.behavior.apply {
-            state = BottomSheetBehavior.STATE_EXPANDED
-            skipCollapsed = true
+
+        // Force the bottom-sheet container to a fixed height (its default wrap_content lets the
+        // grid expand to its full content height, so it never scrolls). Expanding + skipCollapsed
+        // then lets vertical drags scroll the grid rather than move the sheet.
+        dialog.setOnShowListener {
+            val sheet = dialog.findViewById<View>(com.google.android.material.R.id.design_bottom_sheet)
+            if (sheet != null) {
+                sheet.layoutParams = sheet.layoutParams.apply {
+                    height = (resources.displayMetrics.heightPixels * 0.7).toInt()
+                }
+                BottomSheetBehavior.from(sheet).apply {
+                    state = BottomSheetBehavior.STATE_EXPANDED
+                    skipCollapsed = true
+                }
+            }
         }
         dialog.show()
     }
