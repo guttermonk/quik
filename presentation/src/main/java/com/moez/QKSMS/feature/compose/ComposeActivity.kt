@@ -42,6 +42,7 @@ import android.view.DragEvent.ACTION_DRAG_ENDED
 import android.view.DragEvent.ACTION_DRAG_EXITED
 import android.view.DragEvent.ACTION_DROP
 import android.view.Gravity
+import android.view.ContextThemeWrapper
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -873,8 +874,11 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
     private fun promptForCustomEmoji(messageId: Long) {
         // Show a full emoji grid picker (categorised, searchable, tracks its own recents) rather
         // than relying on the system keyboard's emoji tab, which can't be opened programmatically.
-        val dialog = BottomSheetDialog(this)
-        val picker = EmojiPickerView(this).apply {
+        // EmojiPickerView needs a Material3 theme for its colours; wrap in one that follows the
+        // app's day/night setting so it isn't unstyled (white-on-white) on a dark theme.
+        val themedContext = ContextThemeWrapper(this, R.style.ReactionEmojiPickerTheme)
+        val dialog = BottomSheetDialog(themedContext)
+        val picker = EmojiPickerView(themedContext).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 (resources.displayMetrics.density * 360).toInt()

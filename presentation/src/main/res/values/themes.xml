@@ -84,4 +84,11 @@
     <style name="AppThemeDialog.Black" />
     <style name="PopupTheme.Black" />
 
+    <!--
+      Material3 theme used only for the emoji reaction picker bottom sheet. EmojiPickerView reads
+      Material3 colour attributes, which the app's AppCompat themes don't provide. DayNight follows
+      the app's night-mode setting via the -night resource qualifier.
+    -->
+    <style name="ReactionEmojiPickerTheme" parent="Theme.Material3.DayNight" />
+
 </resources>
