@@ -59,7 +59,6 @@ import androidx.appcompat.app.AlertDialog
 import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.isVisible
 import androidx.emoji2.emojipicker.EmojiPickerView
 import androidx.lifecycle.ViewModelProvider
@@ -938,10 +937,11 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
                 dialogWindow.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
                 dialogWindow.statusBarColor = window.statusBarColor
                 dialogWindow.navigationBarColor = window.navigationBarColor
-                val activityBars = WindowInsetsControllerCompat(window, window.decorView)
-                val dialogBars = WindowInsetsControllerCompat(dialogWindow, dialogWindow.decorView)
-                dialogBars.isAppearanceLightStatusBars = activityBars.isAppearanceLightStatusBars
-                dialogBars.isAppearanceLightNavigationBars = activityBars.isAppearanceLightNavigationBars
+                // QkThemedActivity drives the light/dark status-bar icons via the legacy
+                // systemUiVisibility flags (not WindowInsetsController), so copy those verbatim to
+                // keep the dialog's icons matching the activity in both light and dark mode.
+                @Suppress("DEPRECATION")
+                run { dialogWindow.decorView.systemUiVisibility = window.decorView.systemUiVisibility }
             }
         }
         dialog.show()
