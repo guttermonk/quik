@@ -22,6 +22,7 @@ import android.Manifest
 import android.animation.LayoutTransition
 import android.app.Activity
 import android.app.DatePickerDialog
+import android.app.Dialog
 import android.app.TimePickerDialog
 import android.content.ActivityNotFoundException
 import android.content.ContentValues
@@ -36,8 +37,6 @@ import android.provider.ContactsContract
 import android.provider.MediaStore
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import android.text.Editable
-import android.text.TextWatcher
 import android.text.format.DateFormat
 import android.view.ContextMenu
 import android.view.DragEvent.ACTION_DRAG_ENDED
@@ -46,9 +45,11 @@ import android.view.DragEvent.ACTION_DROP
 import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
-import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.PopupWindow
 import android.widget.SeekBar
@@ -59,6 +60,7 @@ import androidx.constraintlayout.widget.ConstraintSet
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
+import androidx.emoji2.emojipicker.EmojiPickerView
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelProviders
 import com.google.android.flexbox.FlexboxLayout
@@ -101,7 +103,6 @@ import io.reactivex.schedulers.Schedulers
 import dev.octoshrimpy.quik.databinding.ComposeActivityBinding
 import io.reactivex.subjects.PublishSubject
 import io.reactivex.subjects.Subject
-import java.text.BreakIterator
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -873,46 +874,77 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
     }
 
     private fun promptForCustomEmoji(messageId: Long) {
-        val input = EditText(this).apply {
-            hint = getString(R.string.compose_reaction_emoji_hint)
-            setSingleLine()
-        }
+        // Show a full emoji grid picker (categorised, tracks its own recents) rather than relying on
+        // the system keyboard's emoji tab, which can't be opened programmatically. EmojiPickerView
+        // needs a Material3 theme for its colours, and a plain fixed-height dialog (rather than a
+        // bottom sheet) gives its internal grid an unambiguous bounded viewport so it scrolls.
+        val dialog = Dialog(this, R.style.ReactionEmojiPickerTheme)
+        val drawerHeight = (resources.displayMetrics.heightPixels * 0.7).toInt()
 
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(R.string.compose_reaction_custom_title)
-            .setView(input)
-            .setNegativeButton(R.string.button_cancel, null)
-            .create()
-
-        // pop the keyboard automatically so the user can type an emoji straight away
-        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
-
-        // submit automatically as soon as an emoji is typed, then dismiss
-        input.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                val emoji = firstEmoji(s?.toString() ?: "") ?: return
-                input.removeTextChangedListener(this)
-                reactionSelectedIntent.onNext(messageId to emoji)
-                rememberRecentEmoji(emoji)
+        val picker = EmojiPickerView(dialog.context).apply {
+            // opaque surface background since the window itself is transparent
+            setBackgroundColor(dialog.context.resolveThemeColor(com.google.android.material.R.attr.colorSurface))
+            setOnEmojiPickedListener { item ->
+                reactionSelectedIntent.onNext(messageId to item.emoji)
+                rememberRecentEmoji(item.emoji)
                 dialog.dismiss()
             }
-        })
+        }
 
+        // Full-screen root: a dim scrim with the drawer pinned to the bottom. A gesture that begins
+        // above the drawer is captured here (so it dismisses even if it travels down into the
+        // drawer), while a gesture that begins inside the drawer falls through to the grid so it
+        // scrolls.
+        val root = object : FrameLayout(dialog.context) {
+            override fun onInterceptTouchEvent(ev: MotionEvent): Boolean =
+                ev.actionMasked == MotionEvent.ACTION_DOWN && ev.y < picker.top
+
+            override fun onTouchEvent(ev: MotionEvent): Boolean {
+                if (ev.actionMasked == MotionEvent.ACTION_UP) dialog.dismiss()
+                return true
+            }
+        }.apply {
+            setBackgroundColor(0x80000000.toInt())
+            addView(
+                picker,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT, drawerHeight, Gravity.BOTTOM
+                )
+            )
+        }
+
+        dialog.setContentView(
+            root,
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        )
+        dialog.window?.setLayout(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+        // The full-screen dialog window would otherwise recolour the system bars (in light mode it
+        // left white icons on the white status bar). Once shown, take control of the system bar
+        // backgrounds and copy the activity's bar colours + light/dark icon appearance so they look
+        // unchanged. Done in onShow so the window is attached and the appearance flag actually sticks.
+        dialog.setOnShowListener {
+            dialog.window?.let { dialogWindow ->
+                dialogWindow.clearFlags(
+                    WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS or
+                            WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION
+                )
+                dialogWindow.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+                dialogWindow.statusBarColor = window.statusBarColor
+                dialogWindow.navigationBarColor = window.navigationBarColor
+                // QkThemedActivity drives the light/dark status-bar icons via the legacy
+                // systemUiVisibility flags (not WindowInsetsController), so copy those verbatim to
+                // keep the dialog's icons matching the activity in both light and dark mode.
+                @Suppress("DEPRECATION")
+                run { dialogWindow.decorView.systemUiVisibility = window.decorView.systemUiVisibility }
+            }
+        }
         dialog.show()
-        input.requestFocus()
-    }
-
-    /** Returns the first grapheme cluster (which handles multi-codepoint emoji) of [text], or null */
-    private fun firstEmoji(text: String): String? {
-        val trimmed = text.trim()
-        if (trimmed.isEmpty()) return null
-
-        val iterator = BreakIterator.getCharacterInstance()
-        iterator.setText(trimmed)
-        val end = iterator.next()
-        return if (end == BreakIterator.DONE) trimmed else trimmed.substring(0, end)
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
