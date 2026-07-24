@@ -48,6 +48,7 @@ import android.view.MenuItem
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.PopupWindow
@@ -920,19 +921,28 @@ class ComposeActivity : QkThemedActivity(), ComposeView {
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         )
-        dialog.window?.let { dialogWindow ->
-            dialogWindow.setLayout(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-            // The full-screen dialog window would otherwise recolour the system bars; copy the
-            // activity's bar colours and light/dark icon appearance so they look unchanged.
-            dialogWindow.statusBarColor = window.statusBarColor
-            dialogWindow.navigationBarColor = window.navigationBarColor
-            val activityBars = WindowInsetsControllerCompat(window, window.decorView)
-            val dialogBars = WindowInsetsControllerCompat(dialogWindow, dialogWindow.decorView)
-            dialogBars.isAppearanceLightStatusBars = activityBars.isAppearanceLightStatusBars
-            dialogBars.isAppearanceLightNavigationBars = activityBars.isAppearanceLightNavigationBars
+        dialog.window?.setLayout(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
+        // The full-screen dialog window would otherwise recolour the system bars (in light mode it
+        // left white icons on the white status bar). Once shown, take control of the system bar
+        // backgrounds and copy the activity's bar colours + light/dark icon appearance so they look
+        // unchanged. Done in onShow so the window is attached and the appearance flag actually sticks.
+        dialog.setOnShowListener {
+            dialog.window?.let { dialogWindow ->
+                dialogWindow.clearFlags(
+                    WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS or
+                            WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION
+                )
+                dialogWindow.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
+                dialogWindow.statusBarColor = window.statusBarColor
+                dialogWindow.navigationBarColor = window.navigationBarColor
+                val activityBars = WindowInsetsControllerCompat(window, window.decorView)
+                val dialogBars = WindowInsetsControllerCompat(dialogWindow, dialogWindow.decorView)
+                dialogBars.isAppearanceLightStatusBars = activityBars.isAppearanceLightStatusBars
+                dialogBars.isAppearanceLightNavigationBars = activityBars.isAppearanceLightNavigationBars
+            }
         }
         dialog.show()
     }
